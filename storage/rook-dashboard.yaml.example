@@ -1,0 +1,19 @@
+kind: Route
+metadata:
+  name: rook-ceph-mgr-dashboard
+  namespace: rook-ceph
+  labels:
+    app: rook-ceph-mgr
+    rook_cluster: rook-ceph
+spec:
+  host: rook-ceph-mgr-dashboard.apps.REPLACE_WITH_YOUR_CLUSTER_SUBDOMAIN
+  to:
+    kind: Service
+    name: rook-ceph-mgr-dashboard
+    weight: 100
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  port:
+    targetPort: http-dashboard
+wildCardPolicy: None

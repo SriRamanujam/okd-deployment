@@ -1,0 +1,24 @@
+# This file denotes the base configuration for the OKD 4.x cluster deployment.
+
+apiVersion: v1
+baseDomain: cluster.okd.example.com
+compute:
+- hyperthreading: Enabled
+  name: worker
+  replicas: 0
+controlPlane:
+  hyperthreading: Enabled
+  name: master
+  replicas: 3
+metadata:
+  name: okd-cluster
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  none: {}
+pullSecret: '{"auths":{"fake":{"auth": "bar"}}}'
+sshKey: 'YOU NEED TO REPLACE THIS WITH YOUR SSH KEY'
