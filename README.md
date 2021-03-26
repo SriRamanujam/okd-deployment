@@ -1,5 +1,4 @@
-OKD Deployment Scripts
---
+# OKD Deployment Scripts
 
 This repository contains my OKD deployment scripts. It is designed to deploy an OKD cluster with three control plane nodes and nine workers across three identical hypervisors. A Ceph cluster will be deployed as part of installation, orchestrated and managed by Rook. The Ceph web dashboard will be deployed and available as part of the Ceph deployment. In addition, MetalLB will be deployed into the cluster to provide `LoadBalancer` type services. The internal container registry will be configured to use storage from the Ceph cluster.
 
