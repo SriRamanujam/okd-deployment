@@ -20,5 +20,5 @@ networking:
   - 172.30.0.0/16
 platform:
   none: {}
-pullSecret: '{"auths":{"fake":{"auth": "bar"}}}'
+pullSecret: '{"auths":{"fake":{"auth":"aWQ6cGFzcwo="}}}'
 sshKey: 'YOU NEED TO REPLACE THIS WITH YOUR SSH KEY'
