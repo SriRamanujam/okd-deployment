@@ -154,9 +154,21 @@ oc label node master0."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVI
 oc label node master1."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"
 oc label node master2."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"
 
+# Set up zone labels so that web console and ingress controller schedule onto
+# different hypervisors
+oc label node master0."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"
+oc label node master1."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"
+oc label node master2."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"
+
 for index in {0..2}; do
     while true; do
         if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"; then
+            break
+        else
+            sleep 1
+        fi
+
+        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"; then
             break
         else
             sleep 1
@@ -171,12 +183,24 @@ for index in {3..5}; do
         else
             sleep 1
         fi
+
+        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"; then
+            break
+        else
+            sleep 1
+        fi
     done
 done
 
 for index in {6..8}; do
     while true; do
         if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"; then
+            break
+        else
+            sleep 1
+        fi
+
+        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"; then
             break
         else
             sleep 1
