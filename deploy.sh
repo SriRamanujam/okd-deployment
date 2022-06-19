@@ -28,7 +28,7 @@ HYPERVISOR_3="hv3.okd.example.com"
 ##### END INLINE CONFIGURATION VARIABLES ####
 
 # check dependencies
-for cmd in 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'qemu-img' 'openssl'; do
+for cmd in 'ansible-playbook' 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'openssl'; do
     if ! $(command -v $cmd &>/dev/null); then
         echo "This script requires the $cmd binary to be present in the system's PATH. Please install it before continuing."
         exit 1
@@ -98,6 +98,8 @@ sed -i -e 's/mastersSchedulable: true/mastersSchedulable: false/' "$INSTALL_DIR/
 "${OPENSHIFT_INSTALL}" create ignition-configs --dir="$INSTALL_DIR"
 
 echo "Done. Now initializing cluster..."
+
+ansible-playbook -i "${HYPERVISOR_1},${HYPERVISOR_2},${HYPERVISOR_3}," --user root ansible/main.yml --extra-vars "coreos_version=${COREOS_VERSION}"
 
 # we do the bootstrap last so that all the actual infra can start bootstrapping ASAP
 for directory in hv3 hv2 hv1 bootstrap; do
