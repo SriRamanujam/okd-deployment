@@ -62,6 +62,7 @@ PROJECT_DIR="$PWD"
 INSTALL_DIR="$PROJECT_DIR/config"
 STORAGE_DIR="$PROJECT_DIR/storage"
 LB_DIR="$PROJECT_DIR/lb"
+MONITORING_DIR="$PROJECT_DIR/monitoring"
 KUBECONFIG_PATH="$INSTALL_DIR/auth/kubeconfig"
 TERRAFORM_HOSTS_BASE_DIR="$PROJECT_DIR/terraform"
 
@@ -278,6 +279,14 @@ oc adm policy add-scc-to-user privileged -n metallb-system -z speaker
 echo "Done."
 
 ##### DEPLOY LOADBALANCER END ######
+
+##### CONFIGURE MONITORING #####
+
+echo "Configuring monitoring..."
+oc apply -f "$MONITORING_DIR/configmap.yaml"
+echo "Done."
+
+##### CONFIGURE MONITORING DONE #####
 
 #### DISBALE SAMPLES OPERATOR BEGIN ######
 
