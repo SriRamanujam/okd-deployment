@@ -28,7 +28,7 @@ HYPERVISOR_3="hv3.okd.example.com"
 ##### END INLINE CONFIGURATION VARIABLES ####
 
 # check dependencies
-for cmd in 'ansible-playbook' 'kustomize' 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'openssl'; do
+for cmd in 'ansible-playbook' 'kustomize' 'aws' 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'openssl'; do
     if ! $(command -v $cmd &>/dev/null); then
         echo "This script requires the $cmd binary to be present in the system's PATH. Please install it before continuing."
         exit 1
@@ -234,29 +234,34 @@ echo -n "Unsticking the rook-ceph-operator by restarting it..."
 oc -n rook-ceph delete pod -l app=rook-ceph-operator
 echo "Done."
 
-echo "Patching registry config so that it binds the PVC..."
+echo "Creating image registry storage bucket..."
+oc -n openshift-image-registry apply -F "$REGISTRY_DIR/bucketclaim.yaml"
 
-oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec": {"managementState": "Managed", "storage": {"pvc": {"claim": ""}}}}'
-
-echo -n "Done. Waiting for the PVC to bind..."
-
-# see if the PVC is bound
-PVC_BIND_SUCCESS=no
-for i in {0..120}; do
-    if oc get pvc -n openshift-image-registry | grep -q Bound; then
-        PVC_BIND_SUCCESS=yes
-        break
-    else
-        sleep 1
-    fi
+until oc -n openshift-image-registry wait --for=jsonpath='{.status.phase}'=Bound obc/openshift-image-registry-bucket; do
+    echo "Waiting for bucket creation..."
+    sleep 1
 done
 
-if [[ "$PVC_BIND_SUCCESS" == "no" ]]; then
-    echo "Something is wrong, the PVC did not bind successfully. Bailing!"
-    exit 1
-fi
+echo "Creating the image registry secret..."
+export $(oc -n openshift-image-registry get secret openshift-image-registry-bucket -o jsonpath='{.data}' | jq -r 'map_values(@base64d) | to_entries | .[] | .key + "=" + .value')
+oc create secret generic image-registry-private-configuration-user --from-literal=REGISTRY_STORAGE_S3_ACCESSKEY=$AWS_ACCESS_KEY_ID --from-literal=REGISTRY_STORAGE_S3_SECRETKEY=$AWS_SECRET_ACCESS_KEY --namespace openshift-image-registry
 
-echo "done."
+
+echo "Patching registry config so that it uses the bucket..."
+oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec": "replicas": "2", {"managementState": "Managed", "storage": {"s3": {"region": "us-east-1", "bucket": "'$(oc -n openshift-image-registry get cm openshift-image-registry-bucket -o jsonpath="{.data.BUCKET_NAME}")'", "regionEndpoint": "https://'$(oc get route -n rook-ceph rook-ceph-rgw-library-objectstore -o jsonpath="{.status.ingress[0].host}")'"}}}}'
+
+echo "Waiting for registry operator to finish setting up the bucket..."
+# There's no good way to monitor for this, so we just sleep and hope.
+sleep 10
+
+echo "Resetting public block policy so that the registry doesn't lock itself out by mistake..."
+
+aws --endpoint=https://$(oc get ingress -n rook-ceph rook-ceph-rgw-library-objectstore -o json | jq -r '.spec.rules[] | select (.host | startswith("rook-ceph")) | .host') s3api put-public-access-block --bucket $(oc -n openshift-image-registry get cm openshift-image-registry-bucket -o jsonpath='{.data.BUCKET_NAME}') --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false
+
+unset AWS_ACCESS_KEY_ID
+unset AWS_SECRET_ACCESS_KEY
+
+echo -n "Done."
 
 echo "Patching registry so that it is available externally..."
 
