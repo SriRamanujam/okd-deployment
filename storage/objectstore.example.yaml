@@ -1,0 +1,65 @@
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: pool-objectstore
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    failureDomain: chassis
+    replicated:
+      size: 3
+  dataPool:
+    failureDomain: host
+    erasureCoded:
+      dataChunks: 4
+      codingChunks: 2
+  preservePoolsOnDelete: true
+  gateway:
+    port: 8080
+    instances: 2
+    # A key/value list of annotations
+    annotations:
+    #  key: value
+    placement:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/zone
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - rook-ceph-rgw
+    labels:
+    resources:
+    healthCheck:
+      bucket:
+        disabled: false
+        interval: 120s
+      livenessProbe:
+        disabled: false
+      readinessProbe:
+        disabled: false
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rook-ceph-rgw-objectstore
+  namespace: rook-ceph
+  annotations:
+    route.openshift.io/termination: "edge"
+    route.openshift.io/insecureEdgeTerminationPolicy: "Redirect"
+spec:
+  rules:
+    - host: "rook-ceph-rgw-objectstore-rook-ceph.REPLACE_WITH_APPS_SUBDOMAIN"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rook-ceph-rgw-library-objectstore
+                port:
+                  name: http

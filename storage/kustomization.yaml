@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rook-ceph
+
+# Upgrading Rook is a matter of following the upgrade guide on the Rook website,
+# changing the tag in the two fetched URLs, and re-applying the Kustomization.
+# Once you've done that, run the following:
+# oc -n rook-ceph set image deploy/rook-ceph-operator rook-ceph-operator=rook/ceph:<new version tag>
+
+# To upgrade the Ceph version, change the tag in the JSON patch and re-apply the Kustomize.
+
+resources:
+  # Change these when bumping the version of Rook.
+  - https://raw.githubusercontent.com/rook/rook/v1.8.9/deploy/examples/crds.yaml
+  - https://raw.githubusercontent.com/rook/rook/v1.8.9/deploy/examples/common.yaml
+  
+  # You shouldn't need to change these unless the CRDs within them change.
+  - cluster.yaml
+  - filesystem_ec.yaml
+  - blockpool_replicated.yaml
+  - objectstore.yaml
+  - storageclass-block.yaml
+  - storageclass-cephfs.yaml
+  - storageclass-bucket.yaml
+  - rook-dashboard.yaml
+
+patchesJson6902:
+  - target:
+      kind: CephCluster
+      name: rook-ceph
+      # Change this to bump the version of Ceph deployed.
+    patch: |-
+      - op: replace
+        path: /spec/cephVersion/image
+        value: "quay.io/ceph/ceph:v16.2.6-20210927"

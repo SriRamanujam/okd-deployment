@@ -28,7 +28,7 @@ HYPERVISOR_3="hv3.okd.example.com"
 ##### END INLINE CONFIGURATION VARIABLES ####
 
 # check dependencies
-for cmd in 'ansible-playbook' 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'openssl'; do
+for cmd in 'ansible-playbook' 'kustomize' 'curl' 'jq' 'mktemp' 'oc' 'tar' 'mkdir' 'cp' 'mv' 'rm' 'sed' 'terraform' 'ssh' 'openssl'; do
     if ! $(command -v $cmd &>/dev/null); then
         echo "This script requires the $cmd binary to be present in the system's PATH. Please install it before continuing."
         exit 1
@@ -213,22 +213,8 @@ done
 ###### CEPH BEGIN ######
 
 echo "We now continue by setting up storage (Ceph + Rook)."
-oc apply -f https://raw.githubusercontent.com/rook/rook/${ROOK_TAG}/cluster/examples/kubernetes/ceph/crds.yaml -f https://raw.githubusercontent.com/rook/rook/${ROOK_TAG}/cluster/examples/kubernetes/ceph/common.yaml
-sleep 5
-oc apply -f https://raw.githubusercontent.com/rook/rook/${ROOK_TAG}/cluster/examples/kubernetes/ceph/operator-openshift.yaml
-sleep 5
-oc apply -f "$STORAGE_DIR/cluster.yaml"
-sleep 5
-oc apply -f "$STORAGE_DIR/filesystem_ec.yaml"
-sleep 5
-oc apply -f "$STORAGE_DIR/blockpool_replicated.yaml"
-sleep 5
-oc apply -f "$STORAGE_DIR/storageclass-block.yaml"
-sleep 5
-oc apply -f "$STORAGE_DIR/storageclass-cephfs.yaml"
-sleep 1
-oc apply -f "$STORAGE_DIR/rook-dashboard.yaml"
-sleep 30
+
+kustomize build "$STORAGE_DIR" | oc apply -f -
 
 echo -n "Waiting for Ceph to come up..."
 while true; do
