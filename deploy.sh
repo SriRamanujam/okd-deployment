@@ -279,4 +279,12 @@ echo "Done."
 
 ##### DEPLOY LOADBALANCER END ######
 
+#### DISBALE SAMPLES OPERATOR BEGIN ######
+
+echo "Disabling samples operator..."
+oc patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec": {"managementState": "Removed"}}'
+echo "Done."
+
+#### DISABLE SAMPLES OPERATOR END #####
+
 "${OPENSHIFT_INSTALL}" --dir=config wait-for install-complete --log-level=debug
