@@ -273,11 +273,8 @@ echo "done."
 ###### DEPLOY LOADBALANCER BEGIN ######
 
 echo "Configuring load balancer..."
-oc apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.5/manifests/namespace.yaml
-sed -e s,REPLACE_WITH_MIN_USER_ID,$(oc get project metallb-system -o json | jq -r '.metadata.annotations."openshift.io/sa.scc.uid-range"' | cut -f1 -d'/'),g -e s,REPLACE_WITH_MAX_USER_ID,$(expr $(oc get project metallb-system -o json | jq -r '.metadata.annotations."openshift.io/sa.scc.uid-range"' | sed 's,/, + ,')),g "$LB_DIR/metallb_0.9.5.yaml" | oc apply -f -
-oc create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+kustomize build "$LB_DIR" | oc apply -f -
 oc adm policy add-scc-to-user privileged -n metallb-system -z speaker
-oc apply -f "$LB_DIR/configuration.yaml"
 echo "Done."
 
 ##### DEPLOY LOADBALANCER END ######
