@@ -37,18 +37,11 @@ done
 
 if [[ -z ${OPENSHIFT_INSTALL_RELEASE+x} ]]; then
     # get the latest okd release from the repo
-    OPENSHIFT_INSTALL_RELEASE="$(curl -s https://api.github.com/repos/openshift/okd/releases | jq -r '.[0].tag_name')"
-    OKD_DOWNLOAD_URL="$(curl -s https://api.github.com/repos/openshift/okd/releases | jq -r '.[0].assets[] | select(.name | contains("openshift-install-linux")) | .browser_download_url')"
+    OPENSHIFT_INSTALL_RELEASE="$(curl -s https://api.github.com/repos/okd-project/okd/releases | jq -r '.[0].tag_name')"
+    OKD_DOWNLOAD_URL="$(curl -s https://api.github.com/repos/okd-project/okd/releases | jq -r '.[0].assets[] | select(.name | contains("openshift-install-linux")) | .browser_download_url')"
 fi
 
 echo "Using OKD release $OPENSHIFT_INSTALL_RELEASE to bring up cluster."
-
-if [[ -z ${ROOK_TAG+x} ]]; then
-    # get the latest Rook release tag from the repo
-    ROOK_TAG="$(curl -s https://api.github.com/repos/rook/rook/releases | jq -r '.[0].tag_name')"
-fi
-
-echo "Deploying Rook release $ROOK_TAG into cluster."
 
 if [[ -z ${COREOS_VERSION+x} ]]; then
     COREOS_VERSION=$(curl -s https://builds.coreos.fedoraproject.org/streams/stable.json | jq -r '.architectures.x86_64.artifacts.qemu.release')
@@ -124,16 +117,22 @@ popd
 
 echo "Done."
 
-echo -n "Giving the load balancer some time to realize that the bootstrap VM is out of the rotation..."
-sleep 20
-echo "Done."
-
-echo "We now have to wait for.... something to come up correctly so that the rook yaml can go in properly."
-echo "I don't actually know what that something is, but I think it has something to do with the apiserver."
-echo "Until I figure that out, just wait for 10 minutes and hope."
-sleep 600
-
 export KUBECONFIG="$KUBECONFIG_PATH"
+
+echo "Waiting for API server to come up fully..."
+until oc wait --for=condition=Degraded=False clusteroperator kube-apiserver; do
+    echo "Still waiting..."
+done
+
+until oc wait --for=condition=Progressing=False clusteroperator kube-apiserver; do
+    echo "Still waiting..."
+done
+
+until oc wait --for=condition=Available=True clusteroperator kube-apiserver; do
+    echo "Still waiting..."
+done
+
+echo "Done."
 
 #### AUTOMATICALLY APPROVE WORKER CSRS #########
 
@@ -150,62 +149,47 @@ echo "Done."
 
 ###### SET UP ROLES AND TAGS FOR EACH CLUSTER NODE BEGIN ######
 
-# Do I need this? Probably not. Am I doing it just in case? Yes.
+
+# We label each node with two particular sets of labels.
+# * topology.rook.io/chassis is to inform rook about the physical topology of the cluster. used as part of the input to the ceph CRUSH map.
+# * topology.kubernetes.io/zone is used to denote the AZ, basically, of the cluster. Each hypervisor is basically its own AZ regardless.
+#   used by the ingress controller to ensure proper spread of replicas.
+
 oc label node master0."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"
 oc label node master1."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"
 oc label node master2."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"
 
-# Set up zone labels so that web console and ingress controller schedule onto
-# different hypervisors
 oc label node master0."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"
 oc label node master1."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"
 oc label node master2."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"
 
 for index in {0..2}; do
-    while true; do
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"; do
+        sleep 1
+    done
 
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"; do
+        sleep 1
     done
 done
 
 for index in {3..5}; do
-    while true; do
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"; do
+        sleep 1
+    done
 
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"; do
+        sleep 1
     done
 done
 
 for index in {6..8}; do
-    while true; do
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"; do
+        sleep 1
+    done
 
-        if oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"; then
-            break
-        else
-            sleep 1
-        fi
+    until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"; do
+        sleep 1
     done
 done
 
@@ -215,25 +199,19 @@ done
 
 echo "We now continue by setting up storage (Ceph + Rook)."
 
-kustomize build "$STORAGE_DIR" | oc apply -f -
+until kustomize build "$STORAGE_DIR" | oc apply -f - ; do
+    sleep 1
+done
 
-echo -n "Waiting for Ceph to come up..."
-while true; do
-    if [[ $(oc get pods -n rook-ceph 2>/dev/null | grep rook-ceph-osd | grep -v prepare | grep -cF 'Running') -ge 9 ]]; then
-        break
-    else
-        sleep 1
-    fi
+echo "Waiting for Ceph to come up..."
+until oc wait --timeout=1h --for=condition=Ready=True -n rook-ceph cephcluster rook-ceph; do
+    echo "Still waiting..."
 done
 echo "done."
 
 ###### CEPH END ######
 
 ###### REGISTRY CONFIG BEGIN ######
-
-echo -n "Unsticking the rook-ceph-operator by restarting it..."
-oc -n rook-ceph delete pod -l app=rook-ceph-operator
-echo "Done."
 
 echo "Creating image registry storage bucket..."
 oc -n openshift-image-registry apply -F "$REGISTRY_DIR/bucketclaim.yaml"
@@ -274,7 +252,9 @@ echo "done."
 ###### DEPLOY LOADBALANCER BEGIN ######
 
 echo "Configuring load balancer..."
-kustomize build "$LB_DIR" | oc apply -f -
+until kustomize build "$LB_DIR" | oc apply -f - ; do
+    sleep 1
+done
 oc adm policy add-scc-to-user privileged -n metallb-system -z speaker
 echo "Done."
 

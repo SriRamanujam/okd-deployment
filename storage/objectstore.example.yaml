@@ -52,6 +52,7 @@ metadata:
     route.openshift.io/termination: "edge"
     route.openshift.io/insecureEdgeTerminationPolicy: "Redirect"
 spec:
+  ingressClassName: openshift-default
   rules:
     - host: "rook-ceph-rgw-objectstore-rook-ceph.REPLACE_WITH_APPS_SUBDOMAIN"
       http:

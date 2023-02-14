@@ -12,6 +12,11 @@ controlPlane:
   replicas: 3
 metadata:
   name: okd-cluster
+capabilities:
+  baselineCapabilitySet: None
+  additionalEnabledCapabilities:
+    - CSISnapshot
+    - Console
 networking:
   clusterNetwork:
   - cidr: 10.128.0.0/14
