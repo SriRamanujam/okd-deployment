@@ -12,9 +12,12 @@ namespace: rook-ceph
 
 resources:
   # Change these when bumping the version of Rook.
-  - https://raw.githubusercontent.com/rook/rook/v1.8.9/deploy/examples/crds.yaml
-  - https://raw.githubusercontent.com/rook/rook/v1.8.9/deploy/examples/common.yaml
-  
+  - https://raw.githubusercontent.com/rook/rook/v1.13.3/deploy/examples/crds.yaml
+  - https://raw.githubusercontent.com/rook/rook/v1.13.3/deploy/examples/common.yaml
+  - https://raw.githubusercontent.com/rook/rook/v1.13.3/deploy/examples/operator-openshift.yaml
+  - https://github.com/rook/rook/raw/v1.13.3/deploy/examples/monitoring/rbac.yaml
+  - https://github.com/rook/rook/raw/v1.13.3/deploy/examples/monitoring/localrules.yaml
+
   # You shouldn't need to change these unless the CRDs within them change.
   - cluster.yaml
   - filesystem_ec.yaml
@@ -29,8 +32,19 @@ patchesJson6902:
   - target:
       kind: CephCluster
       name: rook-ceph
+      version: v1
       # Change this to bump the version of Ceph deployed.
     patch: |-
       - op: replace
         path: /spec/cephVersion/image
-        value: "quay.io/ceph/ceph:v16.2.6-20210927"
+        value: "quay.io/ceph/ceph:v18.2.1-20240123"
+  - patch: |-
+      - op: replace
+        path: /allowHostNetwork
+        value: true
+      - op: replace
+        path: /allowHostPorts
+        value: true
+    target:
+      kind: SecurityContextConstraints
+      name: rook-ceph

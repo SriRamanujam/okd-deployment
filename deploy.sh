@@ -155,13 +155,25 @@ echo "Done."
 # * topology.kubernetes.io/zone is used to denote the AZ, basically, of the cluster. Each hypervisor is basically its own AZ regardless.
 #   used by the ingress controller to ensure proper spread of replicas.
 
-oc label node master0."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"
-oc label node master1."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"
-oc label node master2."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"
+until oc label node master0."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"; do
+    sleep 1
+done
+until oc label node master1."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_2}"; do
+    sleep 1
+done
+until oc label node master2."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_3}"; do
+    sleep 1
+done
 
-oc label node master0."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"
-oc label node master1."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"
-oc label node master2."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"
+until oc label node master0."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_1}"; do
+    sleep 1
+done
+until oc label node master1."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_2}"; do
+    sleep 1
+done
+until oc label node master2."${CLUSTER_SUBDOMAIN}" topology.kubernetes.io/zone="${HYPERVISOR_3}"; do
+    sleep 1
+done
 
 for index in {0..2}; do
     until oc label node worker$index."${CLUSTER_SUBDOMAIN}" topology.rook.io/chassis="${HYPERVISOR_1}"; do
@@ -208,6 +220,11 @@ until oc wait --timeout=1h --for=condition=Ready=True -n rook-ceph cephcluster r
     echo "Still waiting..."
 done
 echo "done."
+
+while [[ $(oc get pods -n rook-ceph | grep -F 'osd-' | grep -vF 'prepare' | grep -cF 'Running') -lt 9 ]]; do
+    echo "Waiting for OSDs to come up..."
+    sleep 1
+done
 
 ###### CEPH END ######
 

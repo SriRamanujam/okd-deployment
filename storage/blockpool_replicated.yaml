@@ -18,7 +18,6 @@ spec:
     # gives a hint (%) to Ceph in terms of expected consumption of the total cluster capacity of a given pool
     # for more info: https://docs.ceph.com/docs/master/rados/operations/placement-groups/#specifying-expected-pool-size
     #targetSizeRatio: .5
-  deviceClass: hdd
 
   # A key/value list of annotations
   annotations:
