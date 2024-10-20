@@ -1,55 +1,63 @@
 terraform {
-  required_version = ">= 0.13"
+  required_version = ">= 1.2.0"
   required_providers {
     libvirt = {
       source  = "dmacvicar/libvirt"
-      version = "0.6.11"
+      version = "0.7.6"
     }
   }
 }
 
 resource "libvirt_volume" "bootstrap_root_disk" {
-    name = "bootstrap_root"
-    pool = var.root_pool
-    size = var.root_disk_size
-
-    provisioner "remote-exec" {
-        inline = [
-            "dd if=${var.rootfs} of=/dev/${self.pool}/${self.name} oflag=direct bs=10M"
-        ]
-
-        connection {
-            type        = "ssh"
-            user        = "root"
-            host        = var.host
-            private_key = var.ssh_private_key
-        }
-    }
-}
-
-resource "libvirt_ignition" "bootstrap_ign" {
-    pool = var.ign_pool
-    name = "bootstrap.ign"
-    content = var.ign_file
+  name = "bootstrap_root"
+  pool = var.root_pool
+  size = var.root_disk_size
 }
 
 resource "libvirt_domain" "bootstrap" {
-    name = "bootstrap"
-    memory = 8192
-    vcpu = 4
+  name   = "bootstrap"
+  memory = 8192
+  vcpu   = 4
 
-    coreos_ignition = libvirt_ignition.bootstrap_ign.id
+  machine = "q35"
 
-    disk {
-        volume_id = libvirt_volume.bootstrap_root_disk.id
-    }
+  cpu {
+    mode = "host-passthrougH"
+  }
 
-    network_interface {
-        bridge = var.bridge_name
-        mac = var.mac_addr
-    }
+  console {
+    type        = "virtio"
+    target_port = "0"
+  }
 
-    video {
-        type = "virtio"
-    }
+  graphics {
+    type        = "vnc"
+    listen_type = "address"
+  }
+  
+  video {
+    type = "vga"
+  }
+
+  boot_device {
+    dev = ["hd", "cdrom"]
+  }
+
+  disk {
+    block_device = "/dev/${libvirt_volume.bootstrap_root_disk.pool}/${libvirt_volume.bootstrap_root_disk.name}"
+  }
+
+  disk {
+    file = "/var/lib/libvirt/images/bootstrap.iso"
+  }
+
+  xml {
+    xslt = file("${path.module}/../xslt/cdrom.xsl")
+  }
+
+  network_interface {
+    bridge = var.bridge_name
+    mac    = var.mac_addr
+  }
+
 }

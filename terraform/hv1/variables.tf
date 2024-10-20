@@ -4,7 +4,6 @@
 #
 # 1) host: what host/ip you wish to remotely administer. defaults to localhost
 # 2) user: what user to log in as. defaults to root.
-# 3) ssh_private_key_path: path to the private ssh key that gets you passwordless access to the user.
 
 # network resource you wish to deploy to.
 variable "host" {
@@ -18,20 +17,9 @@ variable "user" {
   default = "root"
 }
 
-# path to private ssh key to allow passwordless access to the user account.
-variable "ssh_private_key_path" {
-  type    = string
-  default = "~/.ssh/id_rsa"
-}
-
 # root disk size
 variable "root_disk_size" {
   default = 53687091200 # 50 GiB
-}
-
-# Fedora CoreOS version. left blank because this is always set on the command line.
-variable "coreos_version" {
-
 }
 
 ##### WORKER CONFIGURATION ####

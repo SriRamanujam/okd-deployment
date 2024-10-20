@@ -1,29 +1,13 @@
 ---
 - hosts: all
+  become: true
   tasks:
-  - name: Ensure qemu-img is installed
-    ansible.builtin.package:
-      name: qemu-img
-      state: present
-
-  - name: Ensure unxz is installed
-    ansible.builtin.package:
-      name: "{{ 'xz_utils' if ansible_distribution == 'Ubuntu' else 'xz' }}"
-      state: present
-
-  - name: Download FCOS base image
-    ansible.builtin.get_url:
-      url: "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/{{ coreos_version }}/x86_64/fedora-coreos-{{ coreos_version }}-qemu.x86_64.qcow2.xz"
-      dest: "/var/tmp/fedora-coreos-{{ coreos_version }}-qemu.x86_64.qcow2.xz"
-
-  - name: Uncompress qcow2
-    ansible.builtin.command:
-      cmd: "unxz fedora-coreos-{{ coreos_version }}-qemu.x86_64.qcow2.xz"
-      chdir: /var/tmp
-      creates: "fedora-coreos-{{ coreos_version }}-qemu.x86_64.qcow2"
-
-  - name: Convert qcow2 to raw image file in /var/lib/libvirt/images
-    ansible.builtin.command:
-      chdir: /var/tmp
-      cmd: "qemu-img convert -f qcow2 -O raw fedora-coreos-{{ coreos_version }}-qemu.x86_64.qcow2 /var/lib/libvirt/images/fedora-coreos-{{ coreos_version }}-qemu.x86_64.raw"
-      creates: "/var/lib/libvirt/images/fedora-coreos-{{ coreos_version }}-qemu.x86_64.raw"
+    - name: Copy isos
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/var/lib/libvirt/images/{{ item }}"
+        mode: '0644'
+      with_items:
+        - worker.iso
+        - master.iso
+        - bootstrap.iso

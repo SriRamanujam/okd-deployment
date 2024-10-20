@@ -38,13 +38,13 @@ done
 if [[ -z ${OPENSHIFT_INSTALL_RELEASE+x} ]]; then
     # get the latest okd release from the repo
     OPENSHIFT_INSTALL_RELEASE="$(curl -s https://api.github.com/repos/okd-project/okd/releases | jq -r '.[0].tag_name')"
-    OKD_DOWNLOAD_URL="$(curl -s https://api.github.com/repos/okd-project/okd/releases | jq -r '.[0].assets[] | select(.name | contains("openshift-install-linux")) | .browser_download_url')"
+    OKD_DOWNLOAD_URL="$(curl -s https://api.github.com/repos/okd-project/okd/releases | jq -r '.[0].assets[] | select(.name | contains("openshift-install-linux-4")) | .browser_download_url')"
 fi
 
 echo "Using OKD release $OPENSHIFT_INSTALL_RELEASE to bring up cluster."
 
 if [[ -z ${COREOS_VERSION+x} ]]; then
-    COREOS_VERSION=$(curl -s https://builds.coreos.fedoraproject.org/streams/stable.json | jq -r '.architectures.x86_64.artifacts.qemu.release')
+    COREOS_VERSION=$(curl -s https://builds.coreos.fedoraproject.org/streams/stable.json | jq -r '.architectures.x86_64.artifacts.metal.release')
 fi
 
 echo "Bootstrapping cluster using Fedora CoreOS $COREOS_VERSION."
@@ -55,11 +55,13 @@ PROJECT_DIR="$PWD"
 INSTALL_DIR="$PROJECT_DIR/config"
 STORAGE_DIR="$PROJECT_DIR/storage"
 LB_DIR="$PROJECT_DIR/lb"
+ISOS_DIR="$PROJECT_DIR/ansible/files"
 MONITORING_DIR="$PROJECT_DIR/monitoring"
 KUBECONFIG_PATH="$INSTALL_DIR/auth/kubeconfig"
 TERRAFORM_HOSTS_BASE_DIR="$PROJECT_DIR/terraform"
 
 OPENSHIFT_INSTALL="$PROJECT_DIR/openshift-install-${OPENSHIFT_INSTALL_RELEASE}"
+FEDORA_COREOS_ISO="$PROJECT_DIR/fedora-coreos-$COREOS_VERSION-live.x86_64.iso"
 
 get_installer() {
     TEMPDIR=$(mktemp -d)
@@ -77,10 +79,21 @@ get_installer() {
     rm -rf $TEMPDIR
 }
 
+get_iso() {
+    TEMPDIR=$(mktemp -d)
+    pushd $TEMPDIR
+    curl -LO $(curl -s https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/$COREOS_VERSION/release.json | jq -r '.architectures.x86_64.media.metal.artifacts.iso.disk.location')
+    popd
+    mv $TEMPDIR/fedora-coreos-$COREOS_VERSION-live.x86_64.iso ${FEDORA_COREOS_ISO}
+    rm -rf $TEMPDIR
+}
+
 echo "Creating install configuration manifests..."
 
 [[ -f "$OPENSHIFT_INSTALL" ]] || get_installer
 [[ -d "$INSTALL_DIR" ]] && rm -rf "$INSTALL_DIR"
+[[ -f "$FEDORA_COREOS_ISO" ]] || get_iso
+rm -f "$ISOS_DIR"/*.iso
 
 mkdir -p "$INSTALL_DIR"
 cp ./install-config.yaml "$INSTALL_DIR"
@@ -91,9 +104,15 @@ sed -i -e 's/mastersSchedulable: true/mastersSchedulable: false/' "$INSTALL_DIR/
 
 "${OPENSHIFT_INSTALL}" create ignition-configs --dir="$INSTALL_DIR"
 
-echo "Done. Now initializing cluster..."
+echo "Done. Now generating ISOs and copying them to the remote... be ready to enter your password!"
 
-ansible-playbook -i "${HYPERVISOR_1},${HYPERVISOR_2},${HYPERVISOR_3}," --user root ansible/main.yml --extra-vars "coreos_version=${COREOS_VERSION}"
+for t in master worker bootstrap; do
+    coreos-installer iso customize --dest-device /dev/vda --dest-ignition "$INSTALL_DIR/$t.ign" --dest-console ttyS0,115200 --dest-console tty0 -o $ANSIBLE_DIR/files/$t.iso fedora-coreos-$COREOS_VERSION-live.x86_64.iso
+done
+
+ansible-playbook -i "${HYPERVISOR_1},${HYPERVISOR_2},${HYPERVISOR_3}," -K --user root $ANSIBLE_DIR/main.yml
+
+echo "Done. Now initializing cluster..."
 
 # we do the bootstrap last so that all the actual infra can start bootstrapping ASAP
 for directory in hv3 hv2 hv1 bootstrap; do
